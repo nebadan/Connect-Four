@@ -1,0 +1,192 @@
+\documentclass[12pt, a4paper]{article}
+
+% ────────────── Packages ──────────────
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath, amssymb}
+\usepackage{graphicx}
+\usepackage{enumitem}
+\usepackage{hyperref}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{booktabs}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{titlesec}
+
+% ────────────── Code Listing Style ──────────────
+\lstset{
+    language=Python,
+    basicstyle=\ttfamily\small,
+    keywordstyle=\color{blue}\bfseries,
+    commentstyle=\color{gray}\itshape,
+    stringstyle=\color{red},
+    numbers=left,
+    numberstyle=\tiny\color{gray},
+    frame=single,
+    breaklines=true,
+    captionpos=b,
+    tabsize=4,
+}
+
+% ────────────── Title ──────────────
+\title{
+    \textbf{Design and Implementation of a Minimax\\Game-Playing Agent for Connect Four}
+}
+\author{
+    Nebiyu Daniel \\
+    \textit{Department of Computer Science} \\
+    \textit{Artificial Intelligence Principles}
+}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+% ══════════════════════════════════════════════════
+\section{Introduction}
+% ══════════════════════════════════════════════════
+
+This report presents the design and implementation of an intelligent game-playing agent for \textbf{Connect Four}, a classic two-player board game. The agent uses the \textbf{Minimax algorithm} with \textbf{alpha-beta pruning} and \textbf{depth-limited heuristic evaluation} to make optimal decisions in an adversarial environment.
+
+Connect Four is played on a $6 \times 7$ vertical grid. Players alternate dropping colored discs into columns, where each disc falls to the lowest available position. The first player to align four consecutive discs—horizontally, vertically, or diagonally—wins. If the board is completely filled with no winner, the game ends in a draw.
+
+The game satisfies the key properties required for Minimax application:
+\begin{itemize}[nosep]
+    \item \textbf{Deterministic} — no random elements
+    \item \textbf{Turn-based} — players alternate moves
+    \item \textbf{Zero-sum} — one player's gain equals the other's loss
+    \item \textbf{Perfect information} — the entire board is visible to both players
+\end{itemize}
+
+% ══════════════════════════════════════════════════
+\section{Game Representation}
+% ══════════════════════════════════════════════════
+
+\subsection{State Space}
+
+The game state is represented as a $6 \times 7$ integer matrix $B$ where each cell $B[r][c] \in \{0, 1, 2\}$, with $0$ denoting an empty cell, $1$ denoting Player~1, and $2$ denoting Player~2. Row~0 is the top of the board, and pieces drop to the lowest empty row.
+
+\subsection{Legal Actions}
+
+A move consists of selecting a column $c \in \{0, 1, \ldots, 6\}$. Column $c$ is a legal move if and only if $B[0][c] = 0$ (the topmost cell in that column is empty).
+
+\subsection{Terminal States and Utility}
+
+A state is terminal when:
+\begin{enumerate}[nosep]
+    \item A player has four consecutive pieces in any direction (win), or
+    \item No legal moves remain (draw).
+\end{enumerate}
+
+The utility function assigns values from the AI's perspective:
+\[
+    U(s) = \begin{cases}
+        +1 & \text{if the AI wins} \\
+        -1 & \text{if the human wins} \\
+        \phantom{+}0 & \text{if the game is a draw}
+    \end{cases}
+\]
+
+% ══════════════════════════════════════════════════
+\section{Minimax Algorithm}
+% ══════════════════════════════════════════════════
+
+\subsection{Core Algorithm}
+
+The Minimax algorithm models the game as a search tree where the AI (\textit{maximizer}) and the opponent (\textit{minimizer}) alternate turns. At each node, the maximizer selects the action with the highest value, and the minimizer selects the action with the lowest value.
+
+\begin{algorithm}[h]
+\caption{Minimax with Alpha-Beta Pruning}\label{alg:minimax}
+\begin{algorithmic}[1]
+\Function{Minimax}{$state, depth, isMax, \alpha, \beta$}
+    \If{$\textsc{Terminal}(state)$ or $depth = 0$}
+        \State \Return $\textsc{Evaluate}(state)$
+    \EndIf
+    \If{$isMax$}
+        \State $value \gets -\infty$
+        \For{each $action$ in $\textsc{Actions}(state)$}
+            \State $value \gets \max(value, \textsc{Minimax}(\textsc{Result}(state, action), depth - 1, \text{false}, \alpha, \beta))$
+            \State $\alpha \gets \max(\alpha, value)$
+            \If{$\alpha \geq \beta$} \textbf{break} \Comment{$\beta$ cutoff}
+            \EndIf
+        \EndFor
+        \State \Return $value$
+    \Else
+        \State $value \gets +\infty$
+        \For{each $action$ in $\textsc{Actions}(state)$}
+            \State $value \gets \min(value, \textsc{Minimax}(\textsc{Result}(state, action), depth - 1, \text{true}, \alpha, \beta))$
+            \State $\beta \gets \min(\beta, value)$
+            \If{$\alpha \geq \beta$} \textbf{break} \Comment{$\alpha$ cutoff}
+            \EndIf
+        \EndFor
+        \State \Return $value$
+    \EndIf
+\EndFunction
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{Alpha-Beta Pruning}
+
+Alpha-beta pruning significantly reduces the number of nodes explored without affecting the result. It maintains two bounds:
+\begin{itemize}[nosep]
+    \item $\alpha$: the best value the maximizer can guarantee (lower bound)
+    \item $\beta$: the best value the minimizer can guarantee (upper bound)
+\end{itemize}
+
+When $\alpha \geq \beta$, the current branch is pruned because the opponent would never allow this path. In the best case, alpha-beta pruning reduces the time complexity from $O(b^d)$ to $O(b^{d/2})$, where $b$ is the branching factor and $d$ is the search depth.
+
+\subsection{Depth-Limited Search}
+
+Since Connect Four has up to $4.5 \times 10^{12}$ possible positions, exhaustive search is infeasible. We limit the search to a configurable depth (3, 5, or 7 levels) and apply a heuristic evaluation function at the depth boundary.
+
+\subsection{Heuristic Evaluation Function}
+
+When the depth limit is reached and the state is non-terminal, a heuristic function estimates the board's favorability. The evaluation function examines every contiguous window of four cells across all directions and scores them based on:
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lc}
+\toprule
+\textbf{Pattern} & \textbf{Score} \\
+\midrule
+4 AI pieces (win) & $+100$ \\
+3 AI + 1 empty & $+10$ \\
+2 AI + 2 empty & $+5$ \\
+Center column piece & $+6$ \\
+3 opponent + 1 empty & $-8$ \\
+2 opponent + 2 empty & $-4$ \\
+\bottomrule
+\end{tabular}
+\caption{Heuristic scoring for windows of four cells}
+\end{table}
+
+The center column receives a bonus because center pieces participate in more potential four-in-a-row combinations, providing more strategic flexibility.
+
+% ══════════════════════════════════════════════════
+\section{Design Choices and Challenges}
+% ══════════════════════════════════════════════════
+
+\subsection{Move Ordering}
+
+Moves are sorted by proximity to the center column before evaluation. Center-first ordering increases the likelihood of early cutoffs in alpha-beta pruning, as central moves tend to produce higher-scoring positions.
+
+\subsection{Win Depth Bonus}
+
+Terminal utility values include a small depth bonus: $U_{\text{win}} = 1000 + d$ for AI wins and $U_{\text{loss}} = -(1000 + d)$ for losses, where $d$ is the remaining depth. This encourages the AI to prefer \textit{faster} wins and \textit{slower} losses.
+
+\subsection{Challenges}
+
+\begin{enumerate}
+    \item \textbf{Search space size}: The Connect Four game tree is far too large for exhaustive Minimax. Depth limiting with heuristic evaluation was essential, and tuning the heuristic weights required iterative experimentation.
+    \item \textbf{Heuristic balance}: Scoring defense too highly made the agent passive, while scoring offense too highly caused it to miss opponent threats. The final weights reflect a balanced offensive-defensive strategy.
+    \item \textbf{Performance}: Even with pruning, deeper searches are computationally expensive. Move ordering was crucial for reducing the effective branching factor.
+\end{enumerate}
+
+% ══════════════════════════════════════════════════
+\section{Conclusion}
+% ══════════════════════════════════════════════════
+
+The implemented Connect Four agent demonstrates the practical application of adversarial search in AI. The combination of Minimax, alpha-beta pruning, depth-limited search, and heuristic evaluation enables the agent to play competitively against human opponents while maintaining reasonable response times. The modular code design separates game logic, AI reasoning, and user interaction, making the system extensible and maintainable.
+
+\end{document}
